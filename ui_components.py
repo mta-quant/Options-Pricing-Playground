@@ -295,7 +295,7 @@ def create_interactive_heatmap(x_values, y_values, z_values, x_label, y_label, t
         z=z_values,
         colorscale=colorscale,
         hoverongaps=False,
-        hovertemplate=f'{x_label}: %{{x:.2f}}<br>{y_label}: %{{y:.2%}}<br>Value: %{{z:.4f}}<extra></extra>' if y_label == "Volatility" else f'{x_label}: %{{x:.2f}}<br>{y_label}: %{{y:.2f}}<br>Value: %{{z:.4f}}<extra></extra>',
+        hovertemplate=f'{x_label}: %{{x:.2f}}<br>{y_label}: %{{y:.2f}}%<br>Value: %{{z:.4f}}<extra></extra>' if y_label == "Volatility" else f'{x_label}: %{{x:.2f}}<br>{y_label}: %{{y:.2f}}%<br>Value: %{{z:.4f}}<extra></extra>',
         showscale=True
     ))
 

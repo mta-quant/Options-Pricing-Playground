@@ -167,7 +167,7 @@ with tab2:
     with col3:
         grid_size = st.selectbox(
             "Grid Size",
-            options=[10, 15, 20, 25, 30],
+            options=[10, 15, 20],
             index=0,
             help="Number of grid points"
         )
