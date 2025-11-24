@@ -13,62 +13,68 @@ from datetime import datetime, timedelta
 import io
 
 
-def create_parameter_inputs(defaults=None):
+def create_parameter_inputs():
     """
     Create sidebar inputs for option parameters.
 
-    Args:
-        defaults: Dictionary with default values
-
     Returns:
-        dict: Dictionary with all parameter values
+        dict: Dictionary with all parameter values, or None if not all inputs provided
     """
-    if defaults is None:
-        defaults = {
-            'S': 100.0,
-            'K': 100.0,
-            'r': 5.0,
-            'T': 1.0,
-            'sigma': 0.2
-        }
+    st.sidebar.header("Option Parameters")
 
-    st.sidebar.header("📊 Option Parameters")
+    # Initialize session state for parameters
+    if 'params_set' not in st.session_state:
+        st.session_state.params_set = False
+    if 'K' not in st.session_state:
+        st.session_state.K = None
 
     # Underlying price
-    with st.sidebar.expander("🎯 Underlying Price", expanded=True):
+    with st.sidebar.expander("Underlying Price", expanded=True):
         S = st.number_input(
             "Current Stock Price ($)",
             min_value=0.01,
-            value=defaults['S'],
+            value=None,
             step=1.0,
             format="%.2f",
+            placeholder="Enter stock price",
             help="Current market price of the underlying asset"
         )
 
     # Strike and moneyness presets
-    with st.sidebar.expander("🎲 Strike Price", expanded=True):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("ATM", help="At-the-money"):
-                defaults['K'] = S
-        with col2:
-            if st.button("10% OTM", help="10% out-of-the-money"):
-                defaults['K'] = S * 1.10
-        with col3:
-            if st.button("10% ITM", help="10% in-the-money"):
-                defaults['K'] = S * 0.90
+    with st.sidebar.expander("Strike Price", expanded=True):
+        # Handle preset button clicks first (before rendering number input)
+        st.write("Quick Presets:")
+
+        if st.button("ATM", width='stretch', help="Set strike price equal to stock price"):
+            if S is not None:
+                st.session_state.K = S
+                st.rerun()
+
+        if st.button("10% OTM", width='stretch', help="Set strike price 10% above stock price"):
+            if S is not None:
+                st.session_state.K = S * 1.10
+                st.rerun()
+
+        if st.button("10% ITM", width='stretch', help="Set strike price 10% below stock price"):
+            if S is not None:
+                st.session_state.K = S * 0.90
+                st.rerun()
 
         K = st.number_input(
             "Strike Price ($)",
             min_value=0.01,
-            value=defaults['K'],
+            value=st.session_state.K,
             step=1.0,
             format="%.2f",
+            placeholder="Enter strike price",
             help="Option strike price"
         )
 
+        if K is not None:
+            st.session_state.K = K
+
     # Time to maturity
-    with st.sidebar.expander("📅 Time to Expiration", expanded=True):
+    with st.sidebar.expander("Time to Expiration", expanded=True):
         time_input_method = st.radio(
             "Input Method",
             ["Years", "Calendar Date"],
@@ -76,12 +82,13 @@ def create_parameter_inputs(defaults=None):
         )
 
         if time_input_method == "Years":
-            T = st.slider(
+            T = st.number_input(
                 "Time to Maturity (Years)",
                 min_value=0.01,
-                max_value=5.0,
-                value=defaults['T'],
+                max_value=10.0,
+                value=1.0,
                 step=0.01,
+                format="%.2f",
                 help="Time until option expiration in years"
             )
         else:
@@ -93,31 +100,37 @@ def create_parameter_inputs(defaults=None):
             )
             days_to_expiry = (expiry_date - datetime.now().date()).days
             T = max(days_to_expiry / 365.0, 0.01)
-            st.info(f"⏳ Time to expiration: {T:.4f} years ({days_to_expiry} days)")
+            st.caption(f"Time to expiration: {T:.4f} years ({days_to_expiry} days)")
 
     # Volatility
-    with st.sidebar.expander("📈 Volatility", expanded=True):
-        sigma_pct = st.slider(
+    with st.sidebar.expander("Volatility", expanded=True):
+        sigma_pct = st.number_input(
             "Volatility (%)",
             min_value=1.0,
             max_value=200.0,
-            value=defaults['sigma'] * 100,
-            step=1.0,
+            value=20.0,
+            step=0.1,
+            format="%.1f",
             help="Annualized volatility (standard deviation)"
         )
         sigma = sigma_pct / 100.0
 
     # Risk-free rate
-    with st.sidebar.expander("💰 Risk-Free Rate", expanded=True):
-        r_pct = st.slider(
+    with st.sidebar.expander("Risk-Free Rate", expanded=True):
+        r_pct = st.number_input(
             "Risk-Free Rate (%)",
             min_value=0.0,
             max_value=20.0,
-            value=defaults['r'],
+            value=5.0,
             step=0.1,
+            format="%.1f",
             help="Annualized risk-free interest rate"
         )
         r = r_pct / 100.0
+
+    # Check if all required inputs are provided
+    if S is None or K is None:
+        return None
 
     return {
         'S': S,
@@ -138,7 +151,7 @@ def create_heatmap_controls():
         dict: Heatmap configuration
     """
     st.sidebar.markdown("---")
-    st.sidebar.header("🗺️ Heatmap Settings")
+    st.sidebar.header("Heatmap Settings")
 
     with st.sidebar.expander("Price Range", expanded=True):
         col1, col2 = st.columns(2)
@@ -177,14 +190,14 @@ def display_option_prices(call_price, put_price):
 
     with col1:
         st.metric(
-            label="📞 Call Option Price",
+            label="Call Option Price",
             value=f"${call_price:.4f}",
             help="European call option price"
         )
 
     with col2:
         st.metric(
-            label="📉 Put Option Price",
+            label="Put Option Price",
             value=f"${put_price:.4f}",
             help="European put option price"
         )
@@ -198,7 +211,7 @@ def display_greeks(greeks_call, greeks_put):
         greeks_call: Dictionary of call Greeks
         greeks_put: Dictionary of put Greeks
     """
-    st.subheader("📊 Option Greeks")
+    st.subheader("Option Greeks")
 
     greeks_df = pd.DataFrame({
         'Greek': ['Delta', 'Gamma', 'Vega', 'Theta', 'Rho'],
@@ -215,26 +228,21 @@ def display_greeks(greeks_call, greeks_put):
             f"{greeks_put['vega']:.4f}",
             f"{greeks_put['theta']:.4f}",
             f"{greeks_put['rho']:.4f}"
-        ],
-        'Description': [
-            'Sensitivity to price ($)',
-            'Rate of change of delta',
-            'Sensitivity to volatility (per 1%)',
-            'Time decay (per day)',
-            'Sensitivity to interest rate (per 1%)'
         ]
     })
 
-    st.dataframe(greeks_df, use_container_width=True, hide_index=True)
+    st.dataframe(greeks_df, width='stretch', hide_index=True)
+
 
 
 def create_interactive_heatmap(x_values, y_values, z_values, x_label, y_label, title, colorscale='RdYlGn'):
     """
-    Create an interactive heatmap using Plotly.
+    Create an interactive heatmap using Plotly with text annotations on each cell.
+    Text color adapts based on cell brightness for readability.
 
     Args:
         x_values: X-axis values
-        y_values: Y-axis values
+        y_values: Y-axis values (if volatility, assumed to be in decimal form)
         z_values: Z-values (2D array)
         x_label: X-axis label
         y_label: Y-axis label
@@ -244,20 +252,75 @@ def create_interactive_heatmap(x_values, y_values, z_values, x_label, y_label, t
     Returns:
         Plotly figure
     """
+    # Normalize z values for color determination
+    z_min = np.min(z_values)
+    z_max = np.max(z_values)
+    z_range = z_max - z_min if z_max != z_min else 1
+
+    # Create text with adaptive colors
+    text_values = []
+    text_colors = []
+
+    for row in z_values:
+        text_row = []
+        color_row = []
+        for val in row:
+            text_row.append(f'{val:.2f}')
+            # Normalize value (0 to 1)
+            normalized = (val - z_min) / z_range if z_range > 0 else 0.5
+            # Use black text for most cells except very dark extremes
+            # White text only for darkest red (< 0.15) and darkest green (> 0.85)
+            if normalized < 0.15 or normalized > 0.85:
+                color_row.append('white')
+            else:
+                color_row.append('black')
+        text_values.append(text_row)
+        text_colors.append(color_row)
+
+    # Convert y_values to percentages if they look like decimals (volatility)
+    y_display = y_values
+    y_tickformat = None
+    if y_label == "Volatility":
+        y_display = y_values * 100  # Convert to percentage
+        y_tickformat = ".1f"
+        y_label_display = "Volatility (%)"
+    else:
+        y_label_display = y_label
+
+    # Create separate traces for each text color
+    # We need to use annotations instead of heatmap text to have different colors
     fig = go.Figure(data=go.Heatmap(
         x=x_values,
-        y=y_values,
+        y=y_display,
         z=z_values,
         colorscale=colorscale,
         hoverongaps=False,
-        hovertemplate=f'{x_label}: %{{x:.2f}}<br>{y_label}: %{{y:.2f}}<br>Value: %{{z:.4f}}<extra></extra>'
+        hovertemplate=f'{x_label}: %{{x:.2f}}<br>{y_label}: %{{y:.2%}}<br>Value: %{{z:.4f}}<extra></extra>' if y_label == "Volatility" else f'{x_label}: %{{x:.2f}}<br>{y_label}: %{{y:.2f}}<br>Value: %{{z:.4f}}<extra></extra>',
+        showscale=True
     ))
 
+    # Add text annotations with adaptive colors
+    annotations = []
+    for i, (y_val, text_row, color_row) in enumerate(zip(y_display, text_values, text_colors)):
+        for j, (x_val, text, color) in enumerate(zip(x_values, text_row, color_row)):
+            annotations.append(
+                dict(
+                    x=x_val,
+                    y=y_val,
+                    text=f'<b>{text}</b>',
+                    showarrow=False,
+                    font=dict(size=16, family="Arial, sans-serif", color=color)
+                )
+            )
+
     fig.update_layout(
-        title=title,
+        title={"text": title, "font": {"size": 20}},
         xaxis_title=x_label,
-        yaxis_title=y_label,
-        height=500,
+        yaxis_title=y_label_display,
+        xaxis={"tickfont": {"size": 14}},
+        yaxis={"tickfont": {"size": 14}, "tickformat": y_tickformat} if y_tickformat else {"tickfont": {"size": 14}},
+        annotations=annotations,
+        height=700,
         hovermode='closest'
     )
 
@@ -379,7 +442,7 @@ def create_distribution_chart(terminal_prices, K, option_type, title="Terminal P
     return fig
 
 
-def download_button_csv(df, filename, label="Download CSV"):
+def download_button_csv(df, filename, label="Download as CSV"):
     """
     Create a download button for CSV data.
 

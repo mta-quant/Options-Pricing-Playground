@@ -34,27 +34,63 @@ st.set_page_config(
 )
 
 # Title and description
-st.title("📈 Black-Scholes Options Pricing & Analysis Platform")
+st.title("Black-Scholes Options Pricing & Analysis Platform")
 st.markdown("""
-Comprehensive options analysis tool with pricing, Greeks, implied volatility, strategies, and Monte Carlo simulation.
+A comprehensive options analysis tool with pricing, Greeks, implied volatility, strategies, and Monte Carlo simulation.
 """)
 
 # Sidebar inputs
 params = ui.create_parameter_inputs()
-S, K, T, r, sigma = params['S'], params['K'], params['T'], params['r'], params['sigma']
 
-# Heatmap controls
-heatmap_config = ui.create_heatmap_controls()
+# Show welcome message if parameters not set
+if params is None:
+    st.markdown("---")
+    st.info("**Welcome!** Please enter the required parameters in the left sidebar to begin analysis.")
+
+    st.markdown("### Getting Started")
+    st.markdown("""
+    To use this platform, please provide the following inputs in the sidebar:
+
+    1. **Current Stock Price (S)** - The current market price of the underlying asset
+    2. **Strike Price (K)** - The option strike price (use Quick Presets for ATM/OTM/ITM)
+    3. **Time to Expiration (T)** - Years until option expiration or select a calendar date
+    4. **Volatility (σ)** - Annualized volatility percentage
+    5. **Risk-Free Rate (r)** - Annualized risk-free interest rate percentage
+
+    Once all required parameters are entered, you can explore:
+    - **Pricing & Greeks**: View option prices and risk metrics
+    - **Heatmaps**: Visualize sensitivities across price and volatility ranges
+    - **Implied Volatility**: Calculate implied volatility from market prices
+    - **Payoff Diagrams**: Understand profit/loss profiles
+    - **Strategy Builder**: Create and analyze multi-leg strategies
+    - **Monte Carlo**: Validate prices using simulation
+    - **Scenario Analysis**: Test sensitivity to parameter changes
+    """)
+
+    st.markdown("### Quick Example")
+    st.markdown("""
+    Try these sample inputs to get started:
+    - Stock Price: $100
+    - Strike Price: $100 (ATM)
+    - Time to Expiration: 1 year
+    - Volatility: 20%
+    - Risk-Free Rate: 5%
+    """)
+
+    st.stop()
+
+# Extract parameters
+S, K, T, r, sigma = params['S'], params['K'], params['T'], params['r'], params['sigma']
 
 # Main content tabs
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-    "💰 Pricing & Greeks",
-    "📊 Heatmaps",
-    "🔍 Implied Volatility",
-    "📉 Payoff Diagrams",
-    "🎯 Strategy Builder",
-    "🎲 Monte Carlo",
-    "⚡ Scenario Analysis"
+    "Pricing & Greeks",
+    "Heatmaps",
+    "Implied Volatility",
+    "Payoff Diagrams",
+    "Strategy Builder",
+    "Monte Carlo",
+    "Scenario Analysis"
 ])
 
 # ============================================================================
@@ -80,7 +116,7 @@ with tab1:
     ui.display_greeks(greeks_call, greeks_put)
 
     # Add interpretations
-    with st.expander("ℹ️ Understanding the Greeks"):
+    with st.expander("Understanding the Greeks"):
         st.markdown("""
         **Delta (Δ)**: Measures the rate of change of option price relative to underlying price.
         - Call delta: 0 to 1 (positive exposure)
@@ -110,7 +146,7 @@ with tab1:
         'Call': [greeks_call[k] for k in ['delta', 'gamma', 'vega', 'theta', 'rho']],
         'Put': [greeks_put[k] for k in ['delta', 'gamma', 'vega', 'theta', 'rho']]
     })
-    ui.download_button_csv(greeks_df, "greeks.csv", "📥 Download Greeks as CSV")
+    ui.download_button_csv(greeks_df, "greeks.csv", "Download Greeks as CSV")
 
 # ============================================================================
 # TAB 2: HEATMAPS
@@ -118,29 +154,49 @@ with tab1:
 with tab2:
     st.header("Interactive Heatmaps")
 
-    # Select metric
-    metric = st.selectbox(
-        "Select Metric to Display",
-        options=['Price', 'Delta', 'Gamma', 'Vega', 'Theta', 'Rho'],
-        help="Choose which metric to visualize"
-    )
-
-    # Select option type
-    col1, col2 = st.columns(2)
+    # Select metric and option type at the top
+    col1, col2, col3 = st.columns(3)
     with col1:
+        metric = st.selectbox(
+            "Select Metric",
+            options=['Price', 'Delta', 'Gamma', 'Vega', 'Theta', 'Rho'],
+            help="Choose which metric to visualize"
+        )
+    with col2:
         option_type = st.radio("Option Type", ['Call', 'Put'], horizontal=True)
+    with col3:
+        grid_size = st.selectbox(
+            "Grid Size",
+            options=[10, 15, 20, 25, 30],
+            index=0,
+            help="Number of grid points"
+        )
+
+    # Initialize session state with default ranges
+    if 'min_price_pct' not in st.session_state:
+        st.session_state.min_price_pct = -20.0
+    if 'max_price_pct' not in st.session_state:
+        st.session_state.max_price_pct = 20.0
+    if 'min_price_abs' not in st.session_state:
+        st.session_state.min_price_abs = S * 0.8
+    if 'max_price_abs' not in st.session_state:
+        st.session_state.max_price_abs = S * 1.2
+    if 'min_vol_pct' not in st.session_state:
+        st.session_state.min_vol_pct = 10.0
+    if 'max_vol_pct' not in st.session_state:
+        st.session_state.max_vol_pct = 50.0
+
+    # Use the absolute price values for range
+    min_price = st.session_state.min_price_abs
+    max_price = st.session_state.max_price_abs
+
+    # Volatility range in decimal
+    min_vol = st.session_state.min_vol_pct / 100
+    max_vol = st.session_state.max_vol_pct / 100
 
     # Generate ranges
-    prices = np.linspace(
-        heatmap_config['min_price'],
-        heatmap_config['max_price'],
-        heatmap_config['grid_size']
-    )
-    volatilities = np.linspace(
-        heatmap_config['min_vol'],
-        heatmap_config['max_vol'],
-        heatmap_config['grid_size']
-    )
+    prices = np.linspace(min_price, max_price, grid_size)
+    volatilities = np.linspace(min_vol, max_vol, grid_size)
 
     # Calculate values for heatmap
     values = np.zeros((len(volatilities), len(prices)))
@@ -183,16 +239,128 @@ with tab2:
         f"{option_type} {metric} Heatmap"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
+
+    # Heatmap Settings (below the chart)
+    st.markdown("---")
+    st.subheader("Heatmap Settings")
+
+    # Initialize widget keys and tracking on first run
+    if 'min_price_abs_input' not in st.session_state:
+        st.session_state.min_price_abs_input = st.session_state.min_price_abs
+    if 'min_price_pct_input' not in st.session_state:
+        st.session_state.min_price_pct_input = st.session_state.min_price_pct
+    if 'max_price_abs_input' not in st.session_state:
+        st.session_state.max_price_abs_input = st.session_state.max_price_abs
+    if 'max_price_pct_input' not in st.session_state:
+        st.session_state.max_price_pct_input = st.session_state.max_price_pct
+
+    # Track previous values to detect user changes
+    if 'last_min_abs' not in st.session_state:
+        st.session_state.last_min_abs = st.session_state.min_price_abs_input
+    if 'last_min_pct' not in st.session_state:
+        st.session_state.last_min_pct = st.session_state.min_price_pct_input
+    if 'last_max_abs' not in st.session_state:
+        st.session_state.last_max_abs = st.session_state.max_price_abs_input
+    if 'last_max_pct' not in st.session_state:
+        st.session_state.last_max_pct = st.session_state.max_price_pct_input
+
+    # Sync inputs bidirectionally (use elif to prevent feedback loops)
+    if abs(st.session_state.min_price_abs_input - st.session_state.last_min_abs) > 0.01:
+        # Min absolute changed, update percentage
+        st.session_state.min_price_pct_input = ((st.session_state.min_price_abs_input / S) - 1) * 100
+        st.session_state.last_min_abs = st.session_state.min_price_abs_input
+        st.session_state.last_min_pct = st.session_state.min_price_pct_input
+    elif abs(st.session_state.min_price_pct_input - st.session_state.last_min_pct) > 0.01:
+        # Min percentage changed, update absolute
+        st.session_state.min_price_abs_input = S * (1 + st.session_state.min_price_pct_input / 100)
+        st.session_state.last_min_pct = st.session_state.min_price_pct_input
+        st.session_state.last_min_abs = st.session_state.min_price_abs_input
+
+    if abs(st.session_state.max_price_abs_input - st.session_state.last_max_abs) > 0.01:
+        # Max absolute changed, update percentage
+        st.session_state.max_price_pct_input = ((st.session_state.max_price_abs_input / S) - 1) * 100
+        st.session_state.last_max_abs = st.session_state.max_price_abs_input
+        st.session_state.last_max_pct = st.session_state.max_price_pct_input
+    elif abs(st.session_state.max_price_pct_input - st.session_state.last_max_pct) > 0.01:
+        # Max percentage changed, update absolute
+        st.session_state.max_price_abs_input = S * (1 + st.session_state.max_price_pct_input / 100)
+        st.session_state.last_max_pct = st.session_state.max_price_pct_input
+        st.session_state.last_max_abs = st.session_state.max_price_abs_input
+
+    # Update main session state values for heatmap calculation
+    st.session_state.min_price_abs = st.session_state.min_price_abs_input
+    st.session_state.max_price_abs = st.session_state.max_price_abs_input
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Price Range**")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.number_input(
+                "Min Price ($)",
+                step=1.0,
+                format="%.2f",
+                key="min_price_abs_input"
+            )
+
+            st.number_input(
+                "Min Change (%)",
+                step=1.0,
+                format="%.1f",
+                key="min_price_pct_input"
+            )
+
+        with col_b:
+            st.number_input(
+                "Max Price ($)",
+                step=1.0,
+                format="%.2f",
+                key="max_price_abs_input"
+            )
+
+            st.number_input(
+                "Max Change (%)",
+                step=1.0,
+                format="%.1f",
+                key="max_price_pct_input"
+            )
+
+    with col2:
+        st.markdown("**Volatility Range**")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.number_input(
+                "Min Volatility (%)",
+                value=st.session_state.min_vol_pct,
+                min_value=0.1,
+                step=1.0,
+                format="%.1f",
+                key="min_vol_pct_input"
+            )
+            st.session_state.min_vol_pct = st.session_state.min_vol_pct_input
+        with col_b:
+            st.number_input(
+                "Max Volatility (%)",
+                value=st.session_state.max_vol_pct,
+                min_value=0.1,
+                step=1.0,
+                format="%.1f",
+                key="max_vol_pct_input"
+            )
+            st.session_state.max_vol_pct = st.session_state.max_vol_pct_input
 
     # Download heatmap data
+    st.markdown("---")
     heatmap_df = pd.DataFrame(
         values_display,
-        index=[f"{v:.3f}" for v in vols_display],
+        index=[f"{v:.1%}" for v in vols_display],
         columns=[f"{p:.2f}" for p in prices]
     )
     ui.download_button_csv(heatmap_df, f"{option_type.lower()}_{metric.lower()}_heatmap.csv",
-                           f"📥 Download {metric} Heatmap Data")
+                           f"Download {metric} Heatmap Data")
 
 # ============================================================================
 # TAB 3: IMPLIED VOLATILITY
@@ -225,7 +393,7 @@ with tab3:
             )
 
         if success and iv_result is not None:
-            st.success(f"✅ {message}")
+            st.success(f"Success: {message}")
 
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -246,10 +414,10 @@ with tab3:
                 'Market Implied': [f"{iv_result*100:.2f}%", f"${market_price:.4f}"],
                 'Your Input': [f"{sigma*100:.2f}%", f"${bs.option_price(S, K, T, r, sigma, iv_option_type.lower()):.4f}"]
             })
-            st.dataframe(comp_df, hide_index=True, use_container_width=True)
+            st.dataframe(comp_df, hide_index=True, width='stretch')
 
         else:
-            st.error(f"❌ {message}")
+            st.error(f"Error: {message}")
 
 # ============================================================================
 # TAB 4: PAYOFF DIAGRAMS
@@ -296,7 +464,7 @@ with tab4:
         title=f"{position} {payoff_option_type} Payoff Diagram (K=${K:.2f})"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # Display key metrics
     st.markdown("---")
@@ -394,14 +562,14 @@ with tab5:
             })
 
         legs_df = pd.DataFrame(legs_data)
-        st.dataframe(legs_df, hide_index=True, use_container_width=True)
+        st.dataframe(legs_df, hide_index=True, width='stretch')
 
         # Net premium
         net_premium = strategy.net_premium()
         if net_premium > 0:
-            st.info(f"💰 Net Premium Paid (Debit): ${net_premium:.4f}")
+            st.info(f"Net Premium Paid (Debit): ${net_premium:.4f}")
         else:
-            st.success(f"💰 Net Premium Received (Credit): ${-net_premium:.4f}")
+            st.success(f"Net Premium Received (Credit): ${-net_premium:.4f}")
 
         # Calculate strategy Greeks
         strategy_greeks = strategy.total_greeks(S, T, r, sigma)
@@ -439,7 +607,7 @@ with tab5:
             title=f"{strategy.name} Payoff Diagram"
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 # ============================================================================
 # TAB 6: MONTE CARLO SIMULATION
@@ -478,7 +646,7 @@ with tab6:
             bs_price = bs.option_price(S, K, T, r, sigma, mc_option_type.lower())
 
         # Display results
-        st.success("✅ Simulation Complete")
+        st.success("Simulation Complete")
 
         st.markdown("---")
         st.subheader("Price Comparison")
@@ -511,7 +679,7 @@ with tab6:
             f"Distribution of Stock Prices at Expiration ({num_sims:,} simulations)"
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         # Statistics
         st.markdown("---")
@@ -556,9 +724,9 @@ with tab7:
 
     with col1:
         st.markdown("**Price Shocks**")
-        if st.button("−10% Price"):
+        if st.button("-10% Price"):
             scenarios['S'] = S * 0.9
-        if st.button("−5% Price"):
+        if st.button("-5% Price"):
             scenarios['S'] = S * 0.95
         if st.button("+5% Price"):
             scenarios['S'] = S * 1.05
@@ -569,7 +737,7 @@ with tab7:
         st.markdown("**Volatility Shocks**")
         if st.button("÷2 Volatility"):
             scenarios['sigma'] = sigma * 0.5
-        if st.button("−25% Vol"):
+        if st.button("-25% Vol"):
             scenarios['sigma'] = sigma * 0.75
         if st.button("+25% Vol"):
             scenarios['sigma'] = sigma * 1.25
@@ -578,11 +746,11 @@ with tab7:
 
     with col3:
         st.markdown("**Time Decay**")
-        if st.button("−7 Days"):
+        if st.button("-7 Days"):
             scenarios['T'] = max(T - 7/365, 0.01)
-        if st.button("−30 Days"):
+        if st.button("-30 Days"):
             scenarios['T'] = max(T - 30/365, 0.01)
-        if st.button("−90 Days"):
+        if st.button("-90 Days"):
             scenarios['T'] = max(T - 90/365, 0.01)
 
     with col4:
@@ -635,7 +803,7 @@ with tab7:
             'Change': [scenario_greeks[k] - base_greeks[k] for k in ['delta', 'gamma', 'vega', 'theta', 'rho']]
         })
 
-        st.dataframe(greeks_comparison, hide_index=True, use_container_width=True)
+        st.dataframe(greeks_comparison, hide_index=True, width='stretch')
 
     # Custom scenario inputs
     st.markdown("---")
